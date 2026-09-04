@@ -1,73 +1,182 @@
+﻿[CmdletBinding()]
+param(
+    [ValidateSet('all', 'x64', 'x86', 'universal')]
+    [string]$Arch = 'all'
+)
+
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = $PSScriptRoot
 $buildDirectory = Join-Path $projectRoot 'build'
 $distDirectory = Join-Path $projectRoot 'dist'
-$releaseDirectory = Join-Path $projectRoot 'release'
 $pythonCacheDirectory = Join-Path $projectRoot '__pycache__'
-$appName = -join @(
-    [char]0x732A, [char]0x732A, [char]0x6210, [char]0x7EE9,
-    [char]0x67E5, [char]0x8BE2
-)
+$appName = '粥粥FJNU成绩查询'
 
-foreach ($path in @($buildDirectory, $distDirectory, $releaseDirectory)) {
-    if (Test-Path -LiteralPath $path) {
-        Remove-Item -LiteralPath $path -Recurse -Force
+Push-Location -LiteralPath $projectRoot
+try {
+    if (-not (Test-Path -LiteralPath $distDirectory)) {
+        New-Item -ItemType Directory -Path $distDirectory | Out-Null
+    }
+
+    $commonArgs = @(
+        '--noconfirm',
+        '--clean',
+        '--onefile',
+        '--windowed',
+        '--icon', 'assets\app-icon.ico',
+        '--add-data', 'assets\fjnu-logo.jpg;assets',
+        '--add-data', 'assets\login-background.webp;assets',
+        '--add-data', 'assets\login-helper.js;assets',
+        '--add-data', 'assets\loading-helper.js;assets',
+        '--add-data', 'assets\grade-helper.js;assets',
+        '--add-data', 'assets\player-helper.js;assets',
+        '--add-data', 'assets\default-bgm.mp3;assets',
+        '--exclude-module', 'tkinter',
+        '--exclude-module', 'unittest',
+        '--exclude-module', 'IPython',
+        '--exclude-module', 'pytest',
+        '--exclude-module', 'sqlite3',
+        '--exclude-module', 'pydoc',
+        '--exclude-module', 'xmlrpc',
+        '--exclude-module', 'pdb',
+        '--exclude-module', 'test',
+        '--exclude-module', 'multiprocessing',
+        'grade_viewer.py'
+    )
+
+    # 1. 构建 x64 版本
+    if ($Arch -in @('all', 'x64', 'universal')) {
+        Write-Host "==> 正在构建 x64 版本..." -ForegroundColor Cyan
+        python -m PyInstaller @commonArgs --name ($appName + '_x64')
+        Copy-Item (Join-Path $distDirectory ($appName + '_x64.exe')) (Join-Path $distDirectory ($appName + '.exe')) -Force
+    }
+
+    # 2. 构建 x86 版本
+    $python32 = Join-Path $env:LOCALAPPDATA 'Programs\Python\Python311-32\python.exe'
+    if (-not (Test-Path -LiteralPath $python32)) {
+        $pyCheck = Get-Command python -ErrorAction SilentlyContinue
+        if ($pyCheck) {
+            $is32 = & python -c "import struct; print(struct.calcsize('P') == 4)" 2>$null
+            if ($is32 -eq 'True') {
+                $python32 = $pyCheck.Source
+            }
+        }
+    }
+    if ($Arch -in @('all', 'x86', 'universal')) {
+        if (Test-Path -LiteralPath $python32) {
+            Write-Host "==> 正在构建 x86 版本..." -ForegroundColor Cyan
+            & $python32 -m PyInstaller @commonArgs --name ($appName + '_x86')
+        } else {
+            Write-Warning "未检测到 32 位 Python，跳过 x86 构建。"
+        }
+    }
+
+    # 3. 构建 Universal 通用版 (AnyCPU 智能双架构自适应)
+    if ($Arch -in @('all', 'universal')) {
+        $x64Exe = Join-Path $distDirectory ($appName + '_x64.exe')
+        $x86Exe = Join-Path $distDirectory ($appName + '_x86.exe')
+        $cscPath = 'C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe'
+
+        if ((Test-Path -LiteralPath $x64Exe) -and (Test-Path -LiteralPath $x86Exe) -and (Test-Path -LiteralPath $cscPath)) {
+            Write-Host "==> 正在生成 Universal 双架构通用版..." -ForegroundColor Cyan
+            $launcherCs = Join-Path $projectRoot 'universal_launcher.tmp.cs'
+            $source = @'
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Windows.Forms;
+
+namespace AknGradesTracker
+{
+    static class Program
+    {
+        [STAThread]
+        static void Main(string[] args)
+        {
+            try
+            {
+                bool is64 = Environment.Is64BitOperatingSystem;
+                string arch = is64 ? "x64" : "x86";
+                string resName = is64 ? "payload_x64" : "payload_x86";
+
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string targetDir = Path.Combine(appData, "FJNUGradeViewer", "universal", arch);
+                Directory.CreateDirectory(targetDir);
+                string targetExe = Path.Combine(targetDir, "粥粥FJNU成绩查询.exe");
+
+                Assembly asm = Assembly.GetExecutingAssembly();
+                using (Stream stream = asm.GetManifestResourceStream(resName))
+                {
+                    if (stream != null)
+                    {
+                        bool extract = !File.Exists(targetExe) || new FileInfo(targetExe).Length != stream.Length;
+                        if (extract)
+                        {
+                            string tempFile = targetExe + ".tmp";
+                            using (FileStream fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                            {
+                                byte[] buffer = new byte[65536];
+                                int read;
+                                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                                {
+                                    fs.Write(buffer, 0, read);
+                                }
+                            }
+                            if (File.Exists(targetExe))
+                            {
+                                try { File.Delete(targetExe); } catch { }
+                            }
+                            File.Move(tempFile, targetExe);
+                        }
+                    }
+                }
+
+                if (!File.Exists(targetExe))
+                {
+                    MessageBox.Show("未能提取核心运行库，请重试。", "粥粥FJNU成绩查询", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                ProcessStartInfo psi = new ProcessStartInfo(targetExe);
+                psi.Arguments = args != null && args.Length > 0 ? string.Join(" ", args) : "";
+                psi.UseShellExecute = true;
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("启动失败: " + ex.Message, "粥粥FJNU成绩查询", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
     }
 }
+'@
+            [System.IO.File]::WriteAllText($launcherCs, $source, [System.Text.Encoding]::UTF8)
+            $universalExe = Join-Path $distDirectory ($appName + '_Universal.exe')
+            & $cscPath /nologo /target:winexe /platform:anycpu /win32icon:"assets\app-icon.ico" `
+                "/resource:$x64Exe,payload_x64" `
+                "/resource:$x86Exe,payload_x86" `
+                "/out:$universalExe" `
+                $launcherCs
+            Remove-Item -LiteralPath $launcherCs -Force -ErrorAction SilentlyContinue
+            Write-Host ("Universal 构建完成: " + $universalExe) -ForegroundColor Green
+        }
+    }
 
-Get-ChildItem -LiteralPath $projectRoot -Filter '*.spec' -File |
-    Remove-Item -Force
+    # 清理构建中间文件
+    Get-ChildItem -LiteralPath $projectRoot -Filter '*.spec' -File | Remove-Item -Force
+    if (Test-Path -LiteralPath $buildDirectory) {
+        Remove-Item -LiteralPath $buildDirectory -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $pythonCacheDirectory) {
+        Remove-Item -LiteralPath $pythonCacheDirectory -Recurse -Force
+    }
 
-python -m PyInstaller `
-  --noconfirm `
-  --clean `
-  --onefile `
-  --windowed `
-  --name $appName `
-  --icon 'assets\app-icon.ico' `
-  --add-data 'assets;assets' `
-  --collect-all webview `
-  --collect-all pythonnet `
-  --collect-all clr_loader `
-  --collect-all bottle `
-  --collect-all proxy_tools `
-  --collect-all cffi `
-  grade_viewer.py
-
-$executable = Join-Path $distDirectory ($appName + '.exe')
-if (-not (Test-Path -LiteralPath $executable)) {
-    throw ('Executable was not generated: ' + $executable)
+    Write-Host "构建结束，输出文件位于 dist/ 目录：" -ForegroundColor Green
+    Get-ChildItem -LiteralPath $distDirectory -Filter '*.exe' | ForEach-Object {
+        Write-Host ("  - " + $_.Name + " (" + [math]::Round($_.Length / 1MB, 2) + " MB)")
+    }
 }
-
-New-Item -ItemType Directory -Path $releaseDirectory | Out-Null
-$releaseNotes = Join-Path $releaseDirectory '使用说明.txt'
-$notes = @(
-    'Piggy Grade Viewer'
-    ''
-    ('Double-click "' + $appName + '.exe" to run. Python and requirements.txt are not required.')
-    'Windows 10/11 x64 is supported.'
-    'If Microsoft Edge WebView2 Runtime is missing, the app can install it from Microsoft.'
-)
-$notes | Set-Content -LiteralPath $releaseNotes -Encoding UTF8
-
-$releaseExecutable = Join-Path $releaseDirectory ($appName + '.exe')
-Copy-Item -LiteralPath $executable -Destination $releaseExecutable
-$releaseArchive = Join-Path $distDirectory 'FJNU-Grade-Viewer-Windows-x64.zip'
-Compress-Archive -LiteralPath $releaseExecutable, $releaseNotes -DestinationPath $releaseArchive
-
-Get-ChildItem -LiteralPath $projectRoot -Filter '*.spec' -File |
-    Remove-Item -Force
-
-if (Test-Path -LiteralPath $buildDirectory) {
-    Remove-Item -LiteralPath $buildDirectory -Recurse -Force
+finally {
+    Pop-Location
 }
-
-if (Test-Path -LiteralPath $pythonCacheDirectory) {
-    Remove-Item -LiteralPath $pythonCacheDirectory -Recurse -Force
-}
-
-Remove-Item -LiteralPath $releaseDirectory -Recurse -Force
-
-Write-Host ('Build complete: ' + $executable)
-Write-Host ('Release archive: ' + $releaseArchive)

@@ -13,7 +13,7 @@
     <style>
       :root{color-scheme:light;--ink:#142b3c;--muted:#607687;--line:rgba(255,255,255,.62);--accent:#087f8c}
       *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"SF Pro Display","Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:0}
-      #fjnu-grades{position:fixed;inset:0;z-index:2147483646;overflow:auto;padding:20px;color:var(--ink);background-color:#d8d0c5;background-image:linear-gradient(120deg,rgba(206,236,235,.34),rgba(226,232,247,.31) 52%,rgba(244,221,213,.3)),url('__BACKGROUND_IMAGE__');background-position:center,center 31%;background-size:cover,cover;background-repeat:no-repeat;background-attachment:fixed}
+      #fjnu-grades{position:fixed;inset:0;z-index:2147483646;overflow:auto;padding:20px;color:var(--ink);background-color:#d8d0c5;background-image:linear-gradient(120deg,rgba(206,236,235,.34),rgba(226,232,247,.31) 52%,rgba(244,221,213,.3)),url('__BACKGROUND_IMAGE__');background-position:center,center 31%;background-size:cover,cover;background-repeat:no-repeat;background-attachment:fixed}#fjnu-grades-video{position:fixed;inset:0;width:100%;height:100%;z-index:-1;object-fit:cover;pointer-events:none}
       #fjnu-grades::before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(110deg,transparent 22%,rgba(255,255,255,.25) 43%,transparent 62%);animation:fg-glide 14s ease-in-out infinite alternate}@keyframes fg-glide{to{transform:translateX(18%)}}
       .fg-shell{position:relative;max-width:1460px;margin:auto}.fg-glass{position:relative;overflow:hidden;border:1px solid var(--line);background:linear-gradient(145deg,rgba(255,255,255,.42),rgba(224,241,247,.17));box-shadow:0 20px 55px rgba(19,55,73,.14),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px rgba(255,255,255,.16);backdrop-filter:blur(22px) saturate(155%);-webkit-backdrop-filter:blur(22px) saturate(155%)}
       .fg-glass::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,rgba(255,255,255,.3),transparent 32%,transparent 70%,rgba(255,255,255,.16))}
@@ -26,7 +26,7 @@
       .fg-pager{position:relative;min-height:54px;padding:9px 14px;border-top:1px solid rgba(255,255,255,.46);display:flex;align-items:center;justify-content:center;gap:8px}.fg-page-button{height:34px;min-width:34px;padding:0 11px;border:1px solid rgba(255,255,255,.72);border-radius:11px;background:rgba(255,255,255,.33);box-shadow:inset 0 1px white;color:#315367;font:650 13px inherit;cursor:pointer}.fg-page-button.active{color:white;background:linear-gradient(135deg,rgba(5,137,145,.91),rgba(30,106,153,.86))}.fg-page-button:disabled{opacity:.42;cursor:default}.fg-page-info{margin:0 5px;color:var(--muted);font-size:12px}
       @media(max-width:760px){#fjnu-grades{padding:12px}.fg-hero{display:block}.fg-status{padding-top:12px}.fg-cards,.fg-filter{grid-template-columns:1fr}.fg-table-wrap{max-height:none}}
     </style>
-    <main id="fjnu-grades"><div class="fg-shell">
+    <main id="fjnu-grades"><video id="fjnu-grades-video" autoplay muted loop playsinline></video><div class="fg-shell">
       <header class="fg-top fg-glass"><div class="fg-brand"><img src="__UNIVERSITY_LOGO__" alt="福建师范大学校徽"><div><b>福建师范大学</b><small>教学管理信息服务平台</small></div></div><button id="fg-refresh" class="fg-refresh" title="重新查询">↻</button></header>
       <section class="fg-hero"><div><div class="fg-eyebrow">ACADEMIC RECORD</div><h1>我的课程成绩</h1><p>按官方筛选条件查询</p></div><div id="fg-status" class="fg-status"><span class="fg-spin"></span>正在读取成绩</div></section>
       <section class="fg-cards"><article class="fg-card fg-glass"><label>已查询课程</label><strong id="fg-courses">--</strong><span>当前成绩记录</span></article><article class="fg-card fg-glass"><label>通过科目</label><strong id="fg-passed">--</strong><span>总评不低于 60 分</span></article><article class="fg-card fg-glass"><label>未通过科目</label><strong id="fg-failed">--</strong><span>低于 60 分或缺考</span></article></section>
@@ -35,6 +35,7 @@
     </div></main>`);
 
   const page=document.querySelector('#fjnu-grades');
+  const gradeVideo=page.querySelector('#fjnu-grades-video'); gradeVideo.style.display='none'; window.pywebview?.api?.get_background_video?.().then(src=>{if(src){gradeVideo.src=src;gradeVideo.style.display='block';gradeVideo.play().catch(()=>{});}});
   const status=page.querySelector('#fg-status');
   const query=page.querySelector('#fg-query');
   const selects={year:page.querySelector('#fg-year'),term:page.querySelector('#fg-term'),mark:page.querySelector('#fg-mark')};

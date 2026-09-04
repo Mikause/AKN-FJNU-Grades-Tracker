@@ -27,7 +27,7 @@
       :root{color-scheme:light;--ink:#142b3c;--muted:#5d7485;--line:rgba(255,255,255,.62);--glass:rgba(242,249,252,.42);--accent:#087f8c}
       *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"SF Pro Display","Segoe UI","Microsoft YaHei",sans-serif;color:var(--ink);letter-spacing:0}
       body{min-height:100vh;overflow:auto;background:#d8e3e9}
-      .scene{position:relative;isolation:isolate;min-height:100vh;overflow:hidden;background-color:#d8d0c5;background-image:url('__BACKGROUND_IMAGE__');background-position:center 31%;background-size:cover;background-repeat:no-repeat}
+      .scene{position:relative;isolation:isolate;min-height:100vh;overflow:hidden;background-color:#d8d0c5;background-image:url('__BACKGROUND_IMAGE__');background-position:center 31%;background-size:cover;background-repeat:no-repeat}.scene-video{position:absolute;inset:0;width:100%;height:100%;z-index:-3;object-fit:cover;pointer-events:none}
       .scene::before{content:"";position:absolute;inset:0;z-index:-2;background:linear-gradient(90deg,rgba(14,37,48,.14),rgba(236,240,237,.02) 52%,rgba(241,222,213,.06))}
       .scene::after{content:"";position:absolute;inset:-20%;z-index:-1;background:linear-gradient(105deg,transparent 28%,rgba(255,255,255,.24) 44%,transparent 61%);transform:translateX(-30%);animation:glide 12s ease-in-out infinite alternate;pointer-events:none}
       @keyframes glide{to{transform:translateX(28%)}}
@@ -52,7 +52,7 @@
       @media(max-height:760px){.copy{display:none}.identity{padding:16px 20px}}
       @media(max-width:820px){.scene{min-height:100vh;background-position:56% 34%}.left-rail{top:14px;bottom:14px;left:14px;width:min(360px,calc(100vw - 28px))}.identity{padding:17px}.brand{font-size:15px}.brand img{width:40px;height:40px}.copy{display:none}.login-panel{padding:23px}.background-customize{right:14px;bottom:14px}.crop-dialog{width:calc(100vw - 28px);padding:16px}.crop-actions{align-items:stretch;flex-direction:column}.crop-actions-left,.crop-actions-right{display:grid;grid-template-columns:1fr 1fr}.crop-button{padding:0 11px}}
     </style>
-    <main class="scene"><div class="left-rail">
+    <main class="scene"><video id="scene-video" class="scene-video" autoplay muted loop playsinline></video><div class="left-rail">
       <section class="identity glass">
         <div class="brand"><img src="__UNIVERSITY_LOGO__" alt="福建师范大学校徽"><span>福建师范大学</span></div>
         <div class="copy"><small>ACADEMIC RECORD</small><h1>教务成绩查询</h1><p>连接学校官方教学管理平台，查看课程成绩、学分与绩点记录。</p></div>
@@ -70,7 +70,7 @@
         </form>
       </section>
     </div><button class="background-customize" id="background-customize" type="button" title="选择并裁切自定义背景"><span class="picture-icon" aria-hidden="true"></span><span>自定义背景</span></button></main>
-    <input id="background-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+    <input id="background-file" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/ogg" hidden>
     <div class="background-editor" id="background-editor" role="dialog" aria-modal="true" aria-labelledby="crop-title">
       <section class="crop-dialog glass">
         <header class="crop-header"><div><h2 id="crop-title">裁切背景图片</h2><p>拖动图片调整位置，使用滑杆或滚轮缩放</p></div><button class="crop-close" id="crop-close" type="button" title="关闭" aria-label="关闭">×</button></header>
@@ -90,6 +90,7 @@
   const submitLabel = document.querySelector('.submit-label');
   const message = document.querySelector('#custom-message');
   const scene = document.querySelector('.scene');
+  const sceneVideo = document.querySelector('#scene-video');
   const backgroundButton = document.querySelector('#background-customize');
   const backgroundFile = document.querySelector('#background-file');
   const editor = document.querySelector('#background-editor');
@@ -99,9 +100,12 @@
   const cropMessage = document.querySelector('#crop-message');
   const cropApply = document.querySelector('#crop-apply');
 
+  window.pywebview?.api?.get_background_video?.().then(savedVideo => { if (savedVideo) { sceneVideo.src = savedVideo; sceneVideo.style.display = 'block'; scene.style.backgroundImage = 'none'; sceneVideo.play().catch(()=>{}); } });
+
   if (officialTips) {
     message.textContent = normalizeServerMessage(officialTips);
     sessionStorage.removeItem('fjnu-login-pending');
+    window.pywebview?.api?.login_failed?.();
   }
   let tipChecks = 0;
   const returnedTipCheck = setInterval(() => {
@@ -109,6 +113,7 @@
     if (returnedMessage) {
       message.textContent = normalizeServerMessage(returnedMessage);
       sessionStorage.removeItem('fjnu-login-pending');
+      window.pywebview?.api?.login_failed?.();
       clearInterval(returnedTipCheck);
     } else if (++tipChecks >= 20) {
       clearInterval(returnedTipCheck);
@@ -154,6 +159,10 @@
   backgroundFile.addEventListener('change',()=>{
     const file=backgroundFile.files?.[0];
     if(!file)return;
+    if(file.type.startsWith('video/')){
+      if(!['video/mp4','video/webm','video/ogg'].includes(file.type)||file.size>50*1024*1024){message.textContent='请选择不超过 50 MB 的 MP4、WebM 或 OGG 视频';backgroundFile.value='';return}
+      const reader=new FileReader(); reader.onload=async()=>{try{await window.pywebview?.api?.save_background(reader.result);sceneVideo.src=reader.result;sceneVideo.style.display='block';scene.style.backgroundImage='none';sceneVideo.play().catch(()=>{});backgroundFile.value='';closeEditor()}catch(error){message.textContent='保存视频背景失败，请重试'}}; reader.onerror=()=>{message.textContent='读取视频失败，请重新选择'}; reader.readAsDataURL(file); return;
+    }
     if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>30*1024*1024){message.textContent='请选择不超过 30 MB 的 JPG、PNG 或 WebP 图片';backgroundFile.value='';return}
     const reader=new FileReader();
     reader.onload=()=>openImage(reader.result);
@@ -169,7 +178,7 @@
   document.querySelector('#crop-close').addEventListener('click',closeEditor);
   document.querySelector('#crop-cancel').addEventListener('click',closeEditor);
   document.querySelector('#crop-reselect').addEventListener('click',selectBackgroundFile);
-  document.querySelector('#crop-reset').addEventListener('click',async()=>{try{const defaultBackground=await window.pywebview?.api?.reset_background();scene.style.backgroundImage=`url('${defaultBackground}')`;backgroundFile.value='';closeEditor()}catch(error){cropMessage.textContent='恢复默认背景失败'}});
+  document.querySelector('#crop-reset').addEventListener('click',async()=>{try{const defaultBackground=await window.pywebview?.api?.reset_background();sceneVideo.removeAttribute('src');sceneVideo.style.display='none';scene.style.backgroundImage=`url('${defaultBackground}')`;backgroundFile.value='';closeEditor()}catch(error){cropMessage.textContent='恢复默认背景失败'}});
   cropApply.addEventListener('click',async()=>{
     if(!crop.naturalWidth)return;
     cropApply.disabled=true;cropApply.textContent='正在应用';cropMessage.textContent='';
@@ -187,7 +196,7 @@
     const context=output.getContext('2d',{alpha:false});
     context.drawImage(cropImage,sourceX,sourceY,sourceWidth,sourceHeight,0,0,output.width,output.height);
     const dataUrl=output.toDataURL('image/jpeg',.9);
-    try{await window.pywebview?.api?.save_background(dataUrl);scene.style.backgroundImage=`url('${dataUrl}')`;backgroundFile.value='';closeEditor()}catch(error){cropMessage.textContent='保存背景失败，请重试'}finally{cropApply.disabled=false;cropApply.textContent='应用背景'}
+    try{await window.pywebview?.api?.save_background(dataUrl);sceneVideo.removeAttribute('src');sceneVideo.style.display='none';scene.style.backgroundImage=`url('${dataUrl}')`;backgroundFile.value='';closeEditor()}catch(error){cropMessage.textContent='保存背景失败，请重试'}finally{cropApply.disabled=false;cropApply.textContent='应用背景'}
   });
   editor.addEventListener('click',event=>{if(event.target===editor)closeEditor()});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&editor.classList.contains('open'))closeEditor()});
@@ -225,4 +234,5 @@
     native.button.click();
 
   });
+
 })();

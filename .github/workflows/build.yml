@@ -1,4 +1,4 @@
-name: Build Windows executable
+name: Build Windows Executables (x86, x64, Universal)
 
 on:
   workflow_dispatch:
@@ -14,22 +14,64 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      # 1. 设置 64 位 Python 并构建 x64 版本
+      - name: Set up Python 64-bit
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
+          architecture: "x64"
 
-      - name: Install dependencies
+      - name: Install dependencies (x64)
         run: python -m pip install -r requirements.txt
 
-      - name: Build executable
+      - name: Build x64 executable
         shell: powershell
-        run: .\build.ps1
+        run: .\build.ps1 -Arch x64
 
-      - name: Upload executable
+      # 2. 设置 32 位 Python 并构建 x86 版本
+      - name: Set up Python 32-bit
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "x86"
+
+      - name: Install dependencies (x86)
+        run: python -m pip install -r requirements.txt
+
+      - name: Build x86 and Universal executables
+        shell: powershell
+        run: |
+          $py32 = (Get-Command python).Source
+          $commonArgs = @(
+            '--noconfirm', '--clean', '--onefile', '--windowed',
+            '--name', '粥粥FJNU成绩查询_x86',
+            '--icon', 'assets\app-icon.ico',
+            '--add-data', 'assets\fjnu-logo.jpg;assets',
+            '--add-data', 'assets\login-background.webp;assets',
+            '--add-data', 'assets\login-helper.js;assets',
+            '--add-data', 'assets\loading-helper.js;assets',
+            '--add-data', 'assets\grade-helper.js;assets',
+            '--add-data', 'assets\player-helper.js;assets',
+            '--add-data', 'assets\default-bgm.mp3;assets',
+            '--exclude-module', 'tkinter',
+            '--exclude-module', 'unittest',
+            '--exclude-module', 'IPython',
+            '--exclude-module', 'pytest',
+            '--exclude-module', 'sqlite3',
+            '--exclude-module', 'pydoc',
+            '--exclude-module', 'xmlrpc',
+            '--exclude-module', 'pdb',
+            '--exclude-module', 'test',
+            '--exclude-module', 'multiprocessing',
+            'grade_viewer.py'
+          )
+          & $py32 -m PyInstaller @commonArgs
+          .\build.ps1 -Arch universal
+
+      # 3. 上传所有构建产物
+      - name: Upload Windows Executables
         uses: actions/upload-artifact@v4
         with:
-          name: FJNU-Grade-Viewer-Windows
+          name: AKN-FJNU-Grades-Tracker-Windows
           path: |
             dist/*.exe
-            dist/*.zip
