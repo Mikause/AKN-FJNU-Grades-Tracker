@@ -1,4 +1,4 @@
-﻿package com.mikause.gradeviewer
+package com.mikause.gradeviewer
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -60,6 +60,8 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         setupBackNavigation()
 
+        findViewById<View>(R.id.splashOverlay)?.postDelayed({ hideSplash() }, 6000)
+
         webView.loadUrl(LOGIN_URL)
     }
 
@@ -117,12 +119,11 @@ class MainActivity : AppCompatActivity() {
                 super.onPageStarted(view, url, favicon)
                 url ?: return
 
+                // 立即隐藏原生旧网页内容，显示中性底色，杜绝正方旧网页白屏/表格闪烁
+                injectJs("document.documentElement.style.visibility = 'hidden'; document.documentElement.style.background = '#d8d0c5';")
+
                 // 注入初始桥接垫片
                 injectJs(webAppInterface.getBridgeShimScript())
-
-                if (url.contains(GRADE_MARKER)) {
-                    injectJs("document.documentElement.style.visibility = 'hidden'; document.documentElement.style.background = '#d8d0c5';")
-                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -138,6 +139,7 @@ class MainActivity : AppCompatActivity() {
                         injectAssetJs("player-helper.js")
                         injectAssetJs("ui-helper.js")
                         injectAssetJs("login-helper.js")
+                        injectJs("requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.style.visibility = 'visible'; window.pywebview?.api?.login_page_ready?.(); }));")
                     }
                     url.contains(GRADE_MARKER) -> {
                         // 注入成绩页脚本
@@ -145,6 +147,7 @@ class MainActivity : AppCompatActivity() {
                         injectAssetJs("player-helper.js")
                         injectAssetJs("ui-helper.js")
                         injectAssetJs("grade-helper.js")
+                        injectJs("requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.style.visibility = 'visible'; window.pywebview?.api?.page_ready?.(); }));")
                     }
                     url.contains("index_initMenu.html") || (!url.contains(LOGIN_MARKER) && !url.contains(GRADE_MARKER)) -> {
                         // 登录成功跳转至成绩查询页
@@ -159,14 +162,48 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript(script, null)
     }
 
-    private fun injectAssetJs(assetPath: String) {
-        try {
-            assets.open(assetPath).use { input ->
-                val script = input.reader().readText()
-                webView.evaluateJavascript(script, null)
+    private fun loadUiScript(assetPath: String): String {
+        return try {
+            var script = assets.open(assetPath).use { it.reader().readText() }
+            if (script.contains("__BACKGROUND_IMAGE__")) {
+                val bgUri = storageManager.getBackgroundImageUri()
+                script = script.replace("__BACKGROUND_IMAGE__", bgUri)
             }
+            if (script.contains("__BACKGROUND_VIDEO__")) {
+                val videoUri = storageManager.getBackgroundVideo()
+                script = script.replace("__BACKGROUND_VIDEO__", videoUri)
+            }
+            if (script.contains("__UNIVERSITY_LOGO__")) {
+                val logoUri = storageManager.getLogoUri()
+                script = script.replace("__UNIVERSITY_LOGO__", logoUri)
+            }
+            if (script.contains("__DEFAULT_TRACK_NAME__")) {
+                script = script.replace("__DEFAULT_TRACK_NAME__", "秋绪 (默认)")
+            }
+            if (script.contains("__UI_SETTINGS_JSON__")) {
+                script = script.replace("__UI_SETTINGS_JSON__", storageManager.getUiSettings())
+            }
+            script
         } catch (e: Exception) {
-            e.printStackTrace()
+            ""
+        }
+    }
+
+    private fun injectAssetJs(assetPath: String) {
+        val script = loadUiScript(assetPath)
+        if (script.isNotEmpty()) {
+            webView.evaluateJavascript(script, null)
+        }
+    }
+
+    fun hideSplash() {
+        val splash = findViewById<View>(R.id.splashOverlay)
+        if (splash != null && splash.visibility == View.VISIBLE) {
+            splash.animate()
+                .alpha(0f)
+                .setDuration(280)
+                .withEndAction { splash.visibility = View.GONE }
+                .start()
         }
     }
 

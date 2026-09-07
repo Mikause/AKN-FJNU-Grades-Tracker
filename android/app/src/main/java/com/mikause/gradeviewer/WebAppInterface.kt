@@ -12,7 +12,10 @@ class WebAppInterface(
     @JavascriptInterface
     fun loginPageReady() {
         activity.runOnUiThread {
-            // Can trigger audio playback if configured
+            activity.hideSplash()
+            if (audioPlayer.shouldPlayOnStartup()) {
+                audioPlayer.play()
+            }
         }
     }
 
@@ -134,7 +137,11 @@ class WebAppInterface(
     @JavascriptInterface
     fun pageReady() {
         activity.runOnUiThread {
+            activity.hideSplash()
             activity.showLoading(false)
+            if (audioPlayer.shouldPlayOnStartup() && !audioPlayer.isPlaying()) {
+                audioPlayer.play()
+            }
         }
     }
 

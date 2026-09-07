@@ -1,4 +1,4 @@
-﻿package com.mikause.gradeviewer
+package com.mikause.gradeviewer
 
 import android.content.Context
 import android.media.MediaPlayer
@@ -16,6 +16,7 @@ class AudioPlayerManager(
     private var isMuted = false
     private var isShuffle = false
     private var cachedDurationMs = 0
+    private var shouldPlayOnStart = true
 
     init {
         restoreState()
@@ -29,9 +30,28 @@ class AudioPlayerManager(
             volume = json.optDouble("volume", 0.7).toFloat().coerceIn(0f, 1f)
             isMuted = json.optBoolean("muted", false)
             isShuffle = json.optBoolean("shuffle", false)
+            shouldPlayOnStart = json.optBoolean("playing", true)
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    fun shouldPlayOnStartup(): Boolean = shouldPlayOnStart && !isMuted
+
+    private fun getDefaultBgmFile(): File {
+        val cacheFile = File(context.cacheDir, "default-bgm.mp3")
+        if (!cacheFile.exists() || cacheFile.length() < 1024L) {
+            try {
+                context.assets.open("default-bgm.mp3").use { input ->
+                    cacheFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return cacheFile
     }
 
     @Synchronized
@@ -40,18 +60,15 @@ class AudioPlayerManager(
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
                 if (trackId == "default") {
-                    val afd = context.assets.openFd("default-bgm.mp3")
-                    setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                    afd.close()
+                    val file = getDefaultBgmFile()
+                    setDataSource(file.absolutePath)
                 } else {
                     val file = storageManager.getMusicFile(trackId)
                     if (file != null && file.exists()) {
                         setDataSource(file.absolutePath)
                     } else {
-                        // Fallback to default if file missing
-                        val afd = context.assets.openFd("default-bgm.mp3")
-                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                        afd.close()
+                        val fileDefault = getDefaultBgmFile()
+                        setDataSource(fileDefault.absolutePath)
                     }
                 }
                 prepare()
@@ -65,7 +82,7 @@ class AudioPlayerManager(
                         start()
                     }
                 }
-                if (autoPlay) {
+                if (autoPlay && !isMuted) {
                     start()
                 }
             }

@@ -213,6 +213,18 @@ class StorageManager(private val context: Context) {
         }
     }
 
+    fun getLogoUri(): String {
+        return try {
+            context.assets.open("fjnu-logo.jpg").use { input ->
+                val bytes = input.readBytes()
+                val base64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                "data:image/jpeg;base64,$base64"
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
     // --- Music Tracks ---
     fun getMusicTracks(): String {
         val array = JSONArray()
