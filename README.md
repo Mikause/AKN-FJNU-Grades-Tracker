@@ -1,8 +1,8 @@
 # 粥粥FJNU成绩查询 (AKN FJNU Grades Tracker)
 
-面向福建师范大学教务系统打造的轻量桌面查分客户端。告别老旧的原生网页体验，换上清新通透的毛玻璃 UI，支持自定义壁纸、动态视频与后台音乐播放。
+面向福建师范大学教务系统打造的轻量桌面与移动端查分客户端。告别老旧的原生网页体验，换上清新通透的毛玻璃 UI，支持自定义壁纸、动态视频与后台音乐播放。
 
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078d7.svg)](https://microsoft.com)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android-0078d7.svg)](https://github.com/Mikause/AKN-FJNU-Grades-Tracker)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776ab.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -63,9 +63,10 @@
 
 | 版本 | 文件名 | 适用场景说明 |
 | :--- | :--- | :--- |
-| **🌟 Universal 通用版** | `粥粥FJNU成绩查询_Universal.exe` | **推荐所有人首选**。内置智能架构探测引擎，自适应 32 位与 64 位 Windows 系统，无需纠结电脑位数，直接双击运行。 |
+| **🌟 Universal 通用版** | `粥粥FJNU成绩查询_Universal.exe` | **推荐 Windows 首选**。内置智能架构探测引擎，自适应 32 位与 64 位系统，直接双击运行。 |
 | **⚡ 64位专版** | `粥粥FJNU成绩查询_x64.exe` | 针对 64 位 Windows 10 / 11 深度优化，单文件体积更小（~18 MB），冷启动性能最高。 |
 | **🛡️ 32位兼容版** | `粥粥FJNU成绩查询_x86.exe` | 专为 32 位老旧系统、老机型或精简测试环境打造，兼具最大化兼容性。 |
+| **📱 Android 安卓版** | `粥粥查分-debug.apk` | **手机端专属**。安装包仅约 10 MB，手机端完整享有毛玻璃 UI、动态视频/壁纸与后台音乐播放体验。 |
 
 > **提示**：现代 Windows 10/11 系统通常已自带 Microsoft Edge WebView2 运行时；若极少数精简版系统检测到缺失，软件启动时会自动提示一键从微软官方下载安装。
 
@@ -114,6 +115,7 @@ python grade_viewer.py
 ## 📁 项目结构
 
 ```text
+android/                 # Android 原生客户端源码 (Kotlin / WebView 容器)
 assets/                  # 静态资源与页面注入脚本
   app-icon.ico           # 应用图标
   default-bgm.mp3        # 默认背景音乐（《秋绪》）
