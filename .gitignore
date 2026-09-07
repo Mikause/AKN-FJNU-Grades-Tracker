@@ -13,3 +13,11 @@ release/
 Thumbs.db
 desktop.ini
 *.tmp
+
+# Android build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.cxx/
+dist_android/
