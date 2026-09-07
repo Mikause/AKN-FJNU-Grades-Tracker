@@ -516,6 +516,12 @@
       uiBtn.onclick = () => openPanel();
       refreshBtn.parentNode.insertBefore(uiBtn, refreshBtn);
     }
+
+    // 3. 动态同步播放器显隐状态
+    const playerEl = document.getElementById('akn-player');
+    if (playerEl) {
+      playerEl.style.display = settings.show_player ? '' : 'none';
+    }
   };
 
   // 页面加载完成后立即尝试挂接，并观察 DOM

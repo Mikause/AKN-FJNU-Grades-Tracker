@@ -119,11 +119,37 @@ class MainActivity : AppCompatActivity() {
                 super.onPageStarted(view, url, favicon)
                 url ?: return
 
+                // 页面重新加载或跳转时（如密码错误刷新页面），立即恢复原生遮罩，彻底杜绝正方原生登录页/错误提示表格闪烁
+                val splash = findViewById<View>(R.id.splashOverlay)
+                splash?.apply {
+                    animate().cancel()
+                    alpha = 1f
+                    visibility = View.VISIBLE
+                }
+
                 // 立即隐藏原生旧网页内容，显示中性底色，杜绝正方旧网页白屏/表格闪烁
                 injectJs("document.documentElement.style.visibility = 'hidden'; document.documentElement.style.background = '#d8d0c5';")
 
                 // 注入初始桥接垫片
                 injectJs(webAppInterface.getBridgeShimScript())
+            }
+
+            override fun onPageCommitVisible(view: WebView?, url: String?) {
+                super.onPageCommitVisible(view, url)
+                // 首次开始渲染 DOM 时，若自定义界面未就绪，继续强制隐藏原生网页
+                injectJs("if (!window.__fjnuLoginGlass && !window.__fjnuGradeGlass) { document.documentElement.style.visibility = 'hidden'; document.documentElement.style.background = '#d8d0c5'; }")
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    hideSplash()
+                    showLoading(false)
+                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -134,19 +160,19 @@ class MainActivity : AppCompatActivity() {
 
                 when {
                     url.contains(LOGIN_MARKER) -> {
-                        // 注入登录页脚本
-                        injectAssetJs("loading-helper.js")
-                        injectAssetJs("player-helper.js")
-                        injectAssetJs("ui-helper.js")
+                        // 注入登录页脚本：必须先注入 login-helper.js 构建登录 DOM（它会重构 body），
+                        // 然后再注入 ui-helper.js 和 player-helper.js，避免弹窗与播放器组件被吸入 officialPage。
+                        // 注意：切勿注入 loading-helper.js，其未隔离的 .field 等样式会污染登录输入框。
                         injectAssetJs("login-helper.js")
+                        injectAssetJs("ui-helper.js")
+                        injectAssetJs("player-helper.js")
                         injectJs("requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.style.visibility = 'visible'; window.pywebview?.api?.login_page_ready?.(); }));")
                     }
                     url.contains(GRADE_MARKER) -> {
                         // 注入成绩页脚本
-                        injectAssetJs("loading-helper.js")
-                        injectAssetJs("player-helper.js")
-                        injectAssetJs("ui-helper.js")
                         injectAssetJs("grade-helper.js")
+                        injectAssetJs("ui-helper.js")
+                        injectAssetJs("player-helper.js")
                         injectJs("requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.style.visibility = 'visible'; window.pywebview?.api?.page_ready?.(); }));")
                     }
                     url.contains("index_initMenu.html") || (!url.contains(LOGIN_MARKER) && !url.contains(GRADE_MARKER)) -> {
@@ -214,14 +240,35 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                val currentUrl = webView.url ?: ""
-                if (currentUrl.contains(GRADE_MARKER)) {
-                    // 成绩页面按返回可以退出或回到登录页
-                    finish()
-                } else if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    finish()
+                webView.evaluateJavascript(
+                    "(function() { " +
+                    "  var drawer = document.getElementById('akn-ui-drawer'); " +
+                    "  var backdrop = document.getElementById('akn-ui-backdrop'); " +
+                    "  if (drawer && drawer.classList.contains('open')) { " +
+                    "    drawer.classList.remove('open'); " +
+                    "    if (backdrop) backdrop.classList.remove('open'); " +
+                    "    return true; " +
+                    "  } " +
+                    "  var crop = document.getElementById('background-editor'); " +
+                    "  if (crop && crop.classList.contains('open')) { " +
+                    "    crop.classList.remove('open'); " +
+                    "    return true; " +
+                    "  } " +
+                    "  return false; " +
+                    "})()"
+                ) { result ->
+                    if (result == "true") {
+                        return@evaluateJavascript
+                    }
+                    val currentUrl = webView.url ?: ""
+                    if (currentUrl.contains(GRADE_MARKER)) {
+                        // 成绩页面按返回可以退出或回到登录页
+                        finish()
+                    } else if (webView.canGoBack()) {
+                        webView.goBack()
+                    } else {
+                        finish()
+                    }
                 }
             }
         })
