@@ -30,6 +30,7 @@ try {
         '--add-data', 'assets\loading-helper.js;assets',
         '--add-data', 'assets\grade-helper.js;assets',
         '--add-data', 'assets\player-helper.js;assets',
+        '--add-data', 'assets\ui-helper.js;assets',
         '--add-data', 'assets\default-bgm.mp3;assets',
         '--exclude-module', 'tkinter',
         '--exclude-module', 'unittest',

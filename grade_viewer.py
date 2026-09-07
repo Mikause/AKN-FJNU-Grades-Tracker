@@ -98,6 +98,7 @@ CUSTOM_BACKGROUND_VIDEO_FILE = APP_DATA_DIR / "custom-background.mp4"
 CUSTOM_BACKGROUND_VIDEO_TYPE_FILE = APP_DATA_DIR / "custom-background.type"
 MUSIC_DIR = APP_DATA_DIR / "music"
 PLAYER_STATE_FILE = APP_DATA_DIR / "player-state.json"
+UI_SETTINGS_FILE = APP_DATA_DIR / "ui-settings.json"
 
 if getattr(sys, "frozen", False):
     ASSETS_DIR = Path(sys._MEIPASS) / "assets"
@@ -235,6 +236,68 @@ def persist_player_state(state: dict[str, object]) -> None:
         encoding="utf-8",
     )
     temporary_file.replace(PLAYER_STATE_FILE)
+
+
+DEFAULT_UI_SETTINGS: dict[str, object] = {
+    "accent_color": "#087f8c",
+    "glass_blur": 22,
+    "glass_opacity": 0.42,
+    "bg_dim": 0.15,
+    "show_player": True,
+}
+
+
+def normalize_ui_settings(settings: object) -> dict[str, object]:
+    if not isinstance(settings, dict):
+        settings = {}
+    accent = str(settings.get("accent_color", "#087f8c")).strip()
+    if not re.match(r"^#[0-9a-fA-F]{6}$", accent):
+        accent = "#087f8c"
+
+    try:
+        glass_blur = int(settings.get("glass_blur", 22))
+    except (TypeError, ValueError):
+        glass_blur = 22
+    glass_blur = max(0, min(40, glass_blur))
+
+    try:
+        glass_opacity = round(float(settings.get("glass_opacity", 0.42)), 2)
+    except (TypeError, ValueError):
+        glass_opacity = 0.42
+    glass_opacity = max(0.15, min(0.85, glass_opacity))
+
+    try:
+        bg_dim = round(float(settings.get("bg_dim", 0.15)), 2)
+    except (TypeError, ValueError):
+        bg_dim = 0.15
+    bg_dim = max(0.0, min(0.75, bg_dim))
+
+    show_player = bool(settings.get("show_player", True))
+
+    return {
+        "accent_color": accent,
+        "glass_blur": glass_blur,
+        "glass_opacity": glass_opacity,
+        "bg_dim": bg_dim,
+        "show_player": show_player,
+    }
+
+
+def load_ui_settings() -> dict[str, object]:
+    try:
+        return normalize_ui_settings(json.loads(UI_SETTINGS_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return dict(DEFAULT_UI_SETTINGS)
+
+
+def persist_ui_settings(settings: dict[str, object]) -> None:
+    APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    temporary_file = UI_SETTINGS_FILE.with_suffix(".tmp")
+    temporary_file.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    temporary_file.replace(UI_SETTINGS_FILE)
 
 
 def music_path(track_id: str) -> Path:
@@ -434,11 +497,14 @@ def load_ui_script(name: str) -> str:
         script = script.replace("__UNIVERSITY_LOGO__", image_data_uri(ASSETS_DIR / "fjnu-logo.jpg"))
     if "__DEFAULT_TRACK_NAME__" in script:
         script = script.replace("__DEFAULT_TRACK_NAME__", DEFAULT_TRACK_NAME)
+    if "__UI_SETTINGS_JSON__" in script:
+        script = script.replace("__UI_SETTINGS_JSON__", json.dumps(load_ui_settings(), ensure_ascii=False))
     return script
 
 
 def inject_ui_script(name: str, include_player: bool = True) -> None:
     code = load_ui_script(name)
+    code = code + "\n" + load_ui_script("ui-helper.js")
     if include_player:
         code = code + "\n" + load_ui_script("player-helper.js")
     window.evaluate_js(code)
@@ -708,6 +774,18 @@ class GradeViewerApi:
                 self.player_state = normalize_player_state(current)
                 persist_player_state(self.player_state)
             self.audio_player.close()
+
+    def get_ui_settings(self) -> dict[str, object]:
+        return load_ui_settings()
+
+    def save_ui_settings(self, settings: dict[str, object]) -> dict[str, object]:
+        normalized = normalize_ui_settings(settings)
+        persist_ui_settings(normalized)
+        return normalized
+
+    def reset_ui_settings(self) -> dict[str, object]:
+        persist_ui_settings(dict(DEFAULT_UI_SETTINGS))
+        return dict(DEFAULT_UI_SETTINGS)
 
     def begin_login(self) -> None:
         global login_in_progress, login_restore_timer
