@@ -113,6 +113,7 @@ class AudioPlayerManager(
 
     @Synchronized
     fun load(trackId: String, autoPlay: Boolean = true): String {
+        shouldPlayOnStart = autoPlay
         initPlayer(trackId, autoPlay)
         persistState()
         return snapshot()
@@ -120,6 +121,7 @@ class AudioPlayerManager(
 
     @Synchronized
     fun play(): String {
+        shouldPlayOnStart = true
         try {
             if (mediaPlayer == null) {
                 initPlayer(currentTrackId, autoPlay = true)
@@ -135,6 +137,7 @@ class AudioPlayerManager(
 
     @Synchronized
     fun pause(): String {
+        shouldPlayOnStart = false
         try {
             mediaPlayer?.pause()
         } catch (e: Exception) {

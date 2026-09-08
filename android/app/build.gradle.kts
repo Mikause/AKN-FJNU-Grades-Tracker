@@ -11,12 +11,28 @@ android {
         applicationId = "com.mikause.gradeviewer"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.1.0"
+        versionCode = 2
+        versionName = "1.2.0"
+    }
+
+    flavorDimensions += "version"
+    productFlavors {
+        create("standard") {
+            dimension = "version"
+        }
+        create("ocr") {
+            dimension = "version"
+        }
+    }
+
+    sourceSets {
+        getByName("ocr") {
+            assets.srcDirs("src/ocr/assets", "../../assets/ocr")
+        }
     }
 
     androidResources {
-        noCompress += "mp3"
+        noCompress += listOf("mp3", "onnx")
     }
 
     buildTypes {
@@ -42,4 +58,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    "ocrImplementation"("com.microsoft.onnxruntime:onnxruntime-android:1.17.1")
 }

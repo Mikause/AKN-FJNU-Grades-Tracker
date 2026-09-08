@@ -205,10 +205,41 @@
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&editor.classList.contains('open'))closeEditor()});
   window.addEventListener('resize',()=>{if(editor.classList.contains('open'))sizeCropStage()});
 
+  const autoRecognizeCaptcha = async () => {
+    if (!captchaImage || !captchaImage.naturalWidth) return;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = captchaImage.naturalWidth;
+      canvas.height = captchaImage.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(captchaImage, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      const code = await window.pywebview?.api?.recognize_captcha?.(dataUrl);
+      if (code && code.length >= 4) {
+        captcha.value = code.trim();
+        native.captcha.value = captcha.value;
+      }
+    } catch (error) {}
+  };
+
   captchaImage.src = native.captchaImage.src;
+  if (captchaImage.complete && captchaImage.naturalWidth) {
+    autoRecognizeCaptcha();
+  } else {
+    captchaImage.addEventListener('load', autoRecognizeCaptcha, { once: true });
+  }
+
   captchaImage.addEventListener('click', () => {
     native.captchaImage.click();
-    setTimeout(() => { captchaImage.src = native.captchaImage.src; captcha.value = ''; }, 100);
+    setTimeout(() => {
+      captchaImage.src = native.captchaImage.src;
+      captcha.value = '';
+      if (captchaImage.complete && captchaImage.naturalWidth) {
+        autoRecognizeCaptcha();
+      } else {
+        captchaImage.addEventListener('load', autoRecognizeCaptcha, { once: true });
+      }
+    }, 120);
   });
 
   window.pywebview?.api?.get_saved_credentials().then(saved => {

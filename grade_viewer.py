@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import ctypes
+import io
 import json
 import math
 import os
@@ -21,6 +22,16 @@ from ctypes import wintypes
 from pathlib import Path
 
 import webview
+
+try:
+    import numpy as np
+    import onnxruntime
+    from PIL import Image
+
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+
 
 
 APP_TITLE = "粥粥FJNU成绩查询"
@@ -107,6 +118,82 @@ else:
 
 DEFAULT_BACKGROUND_FILE = ASSETS_DIR / "login-background.webp"
 DEFAULT_MUSIC_FILE = ASSETS_DIR / "default-bgm.mp3"
+OCR_DIR = ASSETS_DIR / "ocr"
+OCR_MODEL_FILE = OCR_DIR / "common.onnx"
+OCR_CHARSET_FILE = OCR_DIR / "charset.json"
+
+
+class CaptchaRecognizer:
+    def __init__(self, model_path: Path = OCR_MODEL_FILE, charset_path: Path = OCR_CHARSET_FILE) -> None:
+        self.model_path = model_path
+        self.charset_path = charset_path
+        self.session: onnxruntime.InferenceSession | None = None
+        self.charset: list[str] = []
+        self.input_name: str = "input1"
+        self._load()
+
+    def _load(self) -> None:
+        if not (self.model_path.is_file() and self.charset_path.is_file()):
+            raise FileNotFoundError("OCR 模型或字符集文件不存在")
+        with open(self.charset_path, "r", encoding="utf-8") as f:
+            self.charset = json.load(f)
+        opts = onnxruntime.SessionOptions()
+        opts.log_severity_level = 3
+        opts.intra_op_num_threads = 2
+        self.session = onnxruntime.InferenceSession(
+            str(self.model_path), sess_options=opts, providers=["CPUExecutionProvider"]
+        )
+        self.input_name = self.session.get_inputs()[0].name
+
+    def recognize(self, image_data: str | bytes) -> str:
+        if isinstance(image_data, str):
+            if "," in image_data:
+                image_data = image_data.split(",", 1)[1]
+            raw_bytes = base64.b64decode(image_data)
+        else:
+            raw_bytes = image_data
+
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            target_height = 64
+            target_width = max(16, int(img.size[0] * (target_height / img.size[1])))
+            img = img.resize((target_width, target_height), Image.Resampling.LANCZOS).convert("L")
+            arr = np.array(img, dtype=np.float32)
+
+        arr = np.expand_dims(arr, axis=0) / 255.0
+        arr = (arr - 0.5) / 0.5
+        input_tensor = np.array([arr])
+
+        outputs = self.session.run(None, {self.input_name: input_tensor})
+        tokens = outputs[0][0]
+        result: list[str] = []
+        last_token = 0
+        for token in tokens:
+            if token != last_token:
+                last_token = token
+                if 0 < token < len(self.charset):
+                    result.append(self.charset[token])
+        return "".join(result)
+
+
+_ocr_recognizer: CaptchaRecognizer | None = None
+_ocr_lock = threading.Lock()
+
+
+def get_captcha_recognizer() -> CaptchaRecognizer | None:
+    global _ocr_recognizer
+    if not HAS_OCR:
+        return None
+    if not (OCR_MODEL_FILE.is_file() and OCR_CHARSET_FILE.is_file()):
+        return None
+    if _ocr_recognizer is None:
+        with _ocr_lock:
+            if _ocr_recognizer is None:
+                try:
+                    _ocr_recognizer = CaptchaRecognizer()
+                except Exception:
+                    return None
+    return _ocr_recognizer
+
 
 EARLY_NAVIGATION_SCRIPT = """
 (() => {
@@ -787,6 +874,15 @@ class GradeViewerApi:
         persist_ui_settings(dict(DEFAULT_UI_SETTINGS))
         return dict(DEFAULT_UI_SETTINGS)
 
+    def recognize_captcha(self, base64_data: str) -> str:
+        recognizer = get_captcha_recognizer()
+        if recognizer is None:
+            return ""
+        try:
+            return recognizer.recognize(base64_data)
+        except Exception:
+            return ""
+
     def begin_login(self) -> None:
         global login_in_progress, login_restore_timer
         if login_restore_timer is not None:
@@ -914,6 +1010,8 @@ def main() -> None:
     global window
     try:
         ensure_webview2_runtime()
+        if HAS_OCR and OCR_MODEL_FILE.is_file():
+            threading.Thread(target=get_captcha_recognizer, daemon=True).start()
         app_api = GradeViewerApi()
         window = webview.create_window(
             APP_TITLE,

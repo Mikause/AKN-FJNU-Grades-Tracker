@@ -106,9 +106,9 @@
   style.id = 'akn-ui-styles';
   style.textContent = `
     /* 自定义 UI 抽屉面板与动画 */
-    #akn-ui-backdrop{position:fixed;inset:0;z-index:2147483645;background:rgba(8,18,25,.38);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s cubic-bezier(.2,.8,.2,1)}
+    #akn-ui-backdrop{position:fixed;inset:0;z-index:2147483646;background:rgba(8,18,25,.38);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s cubic-bezier(.2,.8,.2,1)}
     #akn-ui-backdrop.open{opacity:1;pointer-events:auto}
-    #akn-ui-drawer{position:fixed;top:0;right:0;bottom:0;z-index:2147483646;width:min(420px,100vw);box-sizing:border-box;display:flex;flex-direction:column;background:linear-gradient(155deg,rgba(247,251,253,.84),rgba(224,239,246,.66));border-left:1px solid rgba(255,255,255,.75);box-shadow:-16px 0 45px rgba(10,34,48,.18),inset 1px 0 rgba(255,255,255,.9);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);transform:translateX(105%);transition:transform .3s cubic-bezier(.16,1,.3,1);color:#142b3c;font-family:"SF Pro Display","Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:0}
+    #akn-ui-drawer{position:fixed;top:0;right:0;bottom:0;z-index:2147483647;width:min(420px,100vw);box-sizing:border-box;display:flex;flex-direction:column;background:linear-gradient(155deg,rgba(247,251,253,.84),rgba(224,239,246,.66));border-left:1px solid rgba(255,255,255,.75);box-shadow:-16px 0 45px rgba(10,34,48,.18),inset 1px 0 rgba(255,255,255,.9);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);transform:translateX(105%);transition:transform .3s cubic-bezier(.16,1,.3,1);color:#142b3c;font-family:"SF Pro Display","Segoe UI","Microsoft YaHei",sans-serif;letter-spacing:0}
     #akn-ui-drawer.open{transform:translateX(0)}
     #akn-ui-drawer *{box-sizing:border-box}
     
@@ -328,6 +328,10 @@
 
   // 面板打开与关闭
   const openPanel = () => {
+    if (document.body) {
+      document.body.appendChild(backdrop);
+      document.body.appendChild(drawer);
+    }
     drawer.classList.add('open');
     backdrop.classList.add('open');
   };
@@ -503,18 +507,25 @@
     }
 
     // 2. 成绩页按键
+    let gradeUiBtn = document.getElementById('fg-ui-settings-btn');
     const gradeHeader = document.querySelector('.fg-top');
     const refreshBtn = document.getElementById('fg-refresh');
-    if (gradeHeader && refreshBtn && !document.getElementById('fg-ui-settings-btn')) {
-      const uiBtn = document.createElement('button');
-      uiBtn.id = 'fg-ui-settings-btn';
-      uiBtn.className = 'fg-refresh';
-      uiBtn.type = 'button';
-      uiBtn.title = '自定义界面风格 (Ctrl+U / F4)';
-      uiBtn.innerHTML = '🎨';
-      uiBtn.style.marginRight = '8px';
-      uiBtn.onclick = () => openPanel();
-      refreshBtn.parentNode.insertBefore(uiBtn, refreshBtn);
+    if (!gradeUiBtn && gradeHeader && refreshBtn) {
+      gradeUiBtn = document.createElement('button');
+      gradeUiBtn.id = 'fg-ui-settings-btn';
+      gradeUiBtn.className = 'fg-refresh';
+      gradeUiBtn.type = 'button';
+      gradeUiBtn.title = '自定义界面风格 (Ctrl+U / F4)';
+      gradeUiBtn.innerHTML = '🎨';
+      gradeUiBtn.style.marginRight = '8px';
+      refreshBtn.parentNode.insertBefore(gradeUiBtn, refreshBtn);
+    }
+    if (gradeUiBtn && !gradeUiBtn.__aknBound) {
+      gradeUiBtn.__aknBound = true;
+      gradeUiBtn.onclick = e => {
+        e.preventDefault();
+        openPanel();
+      };
     }
 
     // 3. 动态同步播放器显隐状态

@@ -1,6 +1,7 @@
 package com.mikause.gradeviewer
 
 import android.webkit.JavascriptInterface
+import com.mikause.gradeviewer.ocr.CaptchaRecognizer
 import org.json.JSONObject
 
 class WebAppInterface(
@@ -8,13 +9,17 @@ class WebAppInterface(
     private val storageManager: StorageManager,
     private val audioPlayer: AudioPlayerManager
 ) {
+    private var startupPlaybackReleased = false
 
     @JavascriptInterface
     fun loginPageReady() {
         activity.runOnUiThread {
             activity.hideSplash()
-            if (audioPlayer.shouldPlayOnStartup()) {
-                audioPlayer.play()
+            if (!startupPlaybackReleased) {
+                startupPlaybackReleased = true
+                if (audioPlayer.shouldPlayOnStartup()) {
+                    audioPlayer.play()
+                }
             }
         }
     }
@@ -139,10 +144,18 @@ class WebAppInterface(
         activity.runOnUiThread {
             activity.hideSplash()
             activity.showLoading(false)
-            if (audioPlayer.shouldPlayOnStartup() && !audioPlayer.isPlaying()) {
-                audioPlayer.play()
+            if (!startupPlaybackReleased) {
+                startupPlaybackReleased = true
+                if (audioPlayer.shouldPlayOnStartup()) {
+                    audioPlayer.play()
+                }
             }
         }
+    }
+
+    @JavascriptInterface
+    fun recognizeCaptcha(base64Data: String): String {
+        return CaptchaRecognizer.getInstance(activity).recognizeBase64(base64Data)
     }
 
     fun getBridgeShimScript(): String {
@@ -182,7 +195,8 @@ class WebAppInterface(
                         reset_ui_settings: () => Promise.resolve(JSON.parse(window.NativeBridge.resetUiSettings() || '{}')),
                         begin_login: () => Promise.resolve(window.NativeBridge.beginLogin()),
                         login_failed: () => Promise.resolve(window.NativeBridge.loginFailed()),
-                        page_ready: () => Promise.resolve(window.NativeBridge.pageReady())
+                        page_ready: () => Promise.resolve(window.NativeBridge.pageReady()),
+                        recognize_captcha: (base64) => Promise.resolve(window.NativeBridge.recognizeCaptcha(base64) || '')
                     }
                 };
             }
